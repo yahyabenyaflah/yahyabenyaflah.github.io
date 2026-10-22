@@ -412,6 +412,108 @@
     padding-top: 1.25rem;
   }
 
+
+  /* ---------- intro ---------- */
+
+  .intro {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: #0D1513;
+    color: #E4EAE4;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    transition: transform 0.95s cubic-bezier(0.76, 0, 0.24, 1);
+  }
+  .intro::after {
+    content: "";
+    position: absolute;
+    left: -10%; right: -10%;
+    top: 100%;
+    height: 14vh;
+    background: inherit;
+    border-radius: 0 0 50% 50%;
+    transition: height 0.95s cubic-bezier(0.76, 0, 0.24, 1);
+  }
+  .intro.leave { transform: translateY(-115%); }
+  .intro.leave::after { height: 0; }
+
+  .intro-hello {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: clamp(2rem, 6vw, 3.6rem);
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+  }
+  .intro-hello::before {
+    content: "";
+    width: 0.6rem; height: 0.6rem; border-radius: 50%;
+    background: #4CBAA7;
+  }
+
+  .intro-name {
+    position: absolute;
+    font-family: var(--display);
+    font-weight: 700;
+    font-stretch: 118%;
+    font-size: clamp(2.2rem, 8vw, 6.5rem);
+    line-height: 1;
+    letter-spacing: -0.04em;
+    text-align: center;
+    padding: 0 16px;
+    display: none;
+  }
+  .intro-name .ln { display: block; overflow: hidden; padding-bottom: 0.08em; }
+  .intro-name .ln + .ln { color: #4CBAA7; }
+  .intro-name .ch {
+    display: inline-block;
+    transform: translateY(110%);
+    animation: rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+  @keyframes rise { to { transform: none; } }
+
+  .intro-count {
+    position: absolute;
+    right: var(--pad);
+    bottom: var(--pad);
+    font-family: var(--mono);
+    font-size: clamp(2.5rem, 9vw, 7rem);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: #93A49E;
+  }
+  .intro-bar {
+    position: absolute;
+    left: 0; bottom: 0;
+    height: 2px;
+    width: 100%;
+    background: #4CBAA7;
+    transform-origin: left;
+    transform: scaleX(0);
+  }
+  .intro-skip {
+    position: absolute;
+    left: var(--pad);
+    bottom: var(--pad);
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #93A49E;
+  }
+
+  /* content reveal after the intro */
+  .reveal { opacity: 0; transform: translateY(28px); }
+  .reveal.in {
+    opacity: 1;
+    transform: none;
+    transition: opacity 0.8s ease, transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+    transition-delay: var(--d, 0s);
+  }
+
   /* ---------- responsive ---------- */
 
   @media (max-width: 60rem) {
@@ -431,8 +533,18 @@
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
+    .intro { display: none; }
+    .reveal { opacity: 1; transform: none; }
   }
 </style>
+
+<div class="intro" id="intro" aria-hidden="true">
+  <div class="intro-hello" id="intro-hello">Bonjour</div>
+  <div class="intro-name" id="intro-name"></div>
+  <div class="intro-count" id="intro-count">0</div>
+  <div class="intro-skip">Cliquer pour passer</div>
+  <div class="intro-bar" id="intro-bar"></div>
+</div>
 
 <div class="shell">
 
@@ -727,6 +839,81 @@
     }
 
     btn.addEventListener("click", function () { setLang(lang === "fr" ? "en" : "fr"); });
+
+
+    // --- intro -----------------------------------------------------------
+    var intro = document.getElementById("intro");
+    var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var seen = false;
+    try { seen = sessionStorage.getItem("intro-seen") === "1"; } catch (e) {}
+
+    // elements that slide in once the curtain lifts
+    var rev = Array.prototype.slice.call(document.querySelectorAll(
+      ".portrait, .mark, .role, .status, nav.toc, .rail-foot, #profil > *, main > section:not(#profil) h2"));
+    rev.forEach(function (el, i) {
+      el.classList.add("reveal");
+      el.style.setProperty("--d", Math.min(i * 0.06, 0.9) + "s");
+    });
+    function showPage() { rev.forEach(function (el) { el.classList.add("in"); }); }
+
+    if (reduce || seen) {
+      intro.remove();
+      showPage();
+    } else {
+      document.documentElement.style.overflow = "hidden";
+      var hello = document.getElementById("intro-hello");
+      var nameBox = document.getElementById("intro-name");
+      var count = document.getElementById("intro-count");
+      var bar = document.getElementById("intro-bar");
+      var words = ["Bonjour", "Hello", "مرحبا", "Hola", "Ciao", "Merhaba", "Salam"];
+      var w = 0, done = false, timers = [];
+
+      var wordTimer = setInterval(function () {
+        w = (w + 1) % words.length;
+        hello.textContent = words[w];
+      }, 230);
+
+      var start = performance.now(), dur = 1800;
+      (function tick(now) {
+        if (done) return;
+        var t = Math.min((now - start) / dur, 1);
+        var e = 1 - Math.pow(1 - t, 3);
+        count.textContent = Math.round(e * 100);
+        bar.style.transform = "scaleX(" + e + ")";
+        if (t < 1) requestAnimationFrame(tick); else showName();
+      })(start);
+
+      function showName() {
+        clearInterval(wordTimer);
+        hello.style.display = "none";
+        var lines = ["Mohamed Yahya", "Ben Yaflah"], k = 0;
+        nameBox.innerHTML = lines.map(function (line) {
+          return '<span class="ln">' + line.split("").map(function (c) {
+            return '<span class="ch" style="animation-delay:' + (k++ * 0.035) + 's">' +
+              (c === " " ? "&nbsp;" : c) + "</span>";
+          }).join("") + "</span>";
+        }).join("");
+        nameBox.style.display = "block";
+        timers.push(setTimeout(finish, 1500));
+      }
+
+      function finish() {
+        if (done) return;
+        done = true;
+        clearInterval(wordTimer);
+        timers.forEach(clearTimeout);
+        try { sessionStorage.setItem("intro-seen", "1"); } catch (e) {}
+        intro.classList.add("leave");
+        setTimeout(showPage, 350);
+        setTimeout(function () {
+          document.documentElement.style.overflow = "";
+          intro.remove();
+        }, 1000);
+      }
+
+      intro.addEventListener("click", finish);
+      document.addEventListener("keydown", function (e) { if (e.key === "Escape") finish(); });
+    }
 
     // --- scroll spy ------------------------------------------------------
     var links = Array.prototype.slice.call(document.querySelectorAll("nav.toc a"));
